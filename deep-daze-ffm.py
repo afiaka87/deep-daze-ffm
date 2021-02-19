@@ -27,12 +27,12 @@ def displ(img, fname=None):
 
 def checkin(num):
     with torch.no_grad():
-        img = model(mgrid).cpu().numpy()[0]
+        img = model(mesh_grid).cpu().numpy()[0]
     displ(img, os.path.join(temp_dir, '%03d.jpg' % num))
 
 
 def train(iteration):
-    img_out = model(mgrid)
+    img_out = model(mesh_grid)
     imgs_sliced = slice_imgs([img_out], samples, norm_in, uniform)
     loss = 0
     out_enc = perceptor.encode_image(imgs_sliced[-1])
@@ -52,7 +52,6 @@ os.makedirs(temp_dir, exist_ok=True)
 clear_output()
 translator = Translator()
 
-
 text = "hollow knight"  # @param {type:"string"}
 translate = False  # @param {type:"boolean"}
 # @markdown or
@@ -61,25 +60,25 @@ upload_image = True  # @param {type:"boolean"}
 if translate:
     text = translator.translate(text, dest='en').text
 
-side_x = 512 # @param {type:"integer"}
+side_x = 512  # @param {type:"integer"}
 side_y = 512  # @param {type:"integer"}
 uniform = False  # @param {type:"boolean"}
-sync_cut = True # @param {type:"boolean"}
-steps = 750 # @param {type:"integer"}
+sync_cut = True  # @param {type:"boolean"}
+steps = 750  # @param {type:"integer"}
 save_freq = 250  # @param {type:"integer"}
 learning_rate = .00001  # @param {type:"number"}
 samples = 120  # @param {type:"integer"}
 siren_layers = 32  # @param {type:"integer"}
 use_fourier_feat_map = True  # @param {type:"boolean"}
-fourier_maps = 256 # @param {type:"integer"}
+fourier_maps = 256  # @param {type:"integer"}
 fourier_scale = 4  # @param {type:"number"}
 out_name = text.replace(' ', '_')
 
-mgrid = get_mgrid(side_y, side_x)  # [262144,2]
+mesh_grid = get_mgrid(side_y, side_x)  # [262144,2]
 if use_fourier_feat_map:
-    mgrid = fourierfm(mgrid, fourier_maps, fourier_scale)
-mgrid = torch.from_numpy(mgrid.astype(np.float32)).cuda()
-model = Siren(mgrid.shape[-1], 256, siren_layers, 3, side_x, side_y).cuda()
+    mesh_grid = fourierfm(mesh_grid, fourier_maps, fourier_scale)
+mesh_grid = torch.from_numpy(mesh_grid.astype(np.float32)).cuda()
+model = Siren(mesh_grid.shape[-1], 256, siren_layers, 3, side_x, side_y).cuda()
 norm_in = torchvision.transforms.Normalize((0.48145466, 0.4578275, 0.40821073), (0.26862954, 0.26130258, 0.27577711))
 text_tokens = clip.tokenize(text)
 
@@ -87,7 +86,7 @@ perceptor, preprocess = clip.load('ViT-B/32')
 txt_encode = perceptor.encode_text(text_tokens.cuda()).detach().clone()
 optimizer = torch.optim.Adam(model.parameters(), learning_rate)
 
-pbar = ProgressBar(steps)
+progress_bar = ProgressBar(steps)
 for i in range(steps):
     train(i)
-    _ = pbar.upd()
+    _ = progress_bar.update()

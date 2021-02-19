@@ -19,8 +19,8 @@ def slice_imgs(imgs, count, transform=None, uniform=False):
         return x * (b - a) + a
 
     rnd_size = torch.rand(count)
-    rnd_offx = torch.rand(count)
-    rnd_offy = torch.rand(count)
+    rnd_off_x = torch.rand(count)
+    rnd_off_y = torch.rand(count)
 
     sz = [img.shape[2:] for img in imgs]
     sz_min = [np.min(s) for s in sz]
@@ -29,17 +29,17 @@ def slice_imgs(imgs, count, transform=None, uniform=False):
         imgs = [pad_up_to(imgs[i], upsize[i], type='centr') for i in range(len(imgs))]
 
     sliced = []
-    for i, img in enumerate(imgs):
+    for img_idx, img in enumerate(imgs):
         cuts = []
         for c in range(count):
-            csize = map(rnd_size[c], 0.5 * sz_min[i], 0.98 * sz_min[i]).int()
+            c_size = map(rnd_size[c], 0.5 * sz_min[img_idx], 0.98 * sz_min[img_idx]).int()
             if uniform is True:
-                offsetx = map(rnd_offx[c], sz[i][1] - csize, 2 * sz[i][1] - csize).int()
-                offsety = map(rnd_offy[c], sz[i][0] - csize, 2 * sz[i][0] - csize).int()
+                offset_x = map(rnd_off_x[c], sz[img_idx][1] - c_size, 2 * sz[img_idx][1] - c_size).int()
+                offset_y = map(rnd_off_y[c], sz[img_idx][0] - c_size, 2 * sz[img_idx][0] - c_size).int()
             else:
-                offsetx = map(rnd_offx[c], 0, sz[i][1] - csize).int()
-                offsety = map(rnd_offy[c], 0, sz[i][0] - csize).int()
-            cut = img[:, :, offsety:offsety + csize, offsetx:offsetx + csize]
+                offset_x = map(rnd_off_x[c], 0, sz[img_idx][1] - c_size).int()
+                offset_y = map(rnd_off_y[c], 0, sz[img_idx][0] - c_size).int()
+            cut = img[:, :, offset_y:offset_y + c_size, offset_x:offset_x + c_size]
             cut = torch.nn.functional.interpolate(cut, (224, 224), mode='bilinear')
             if transform is not None:
                 cut = transform(cut)
@@ -48,7 +48,7 @@ def slice_imgs(imgs, count, transform=None, uniform=False):
     return sliced
 
 
-def makevid(seq_dir, size=None):
+def make_video(seq_dir, size=None):
     out_sequence = seq_dir + '/%03d.jpg'
     out_video = seq_dir + '.mp4'
     # !ffmpeg -y -v warning -i $out_sequence $out_video
@@ -112,10 +112,10 @@ def shortime(sec):
 
 class ProgressBar(object):
     def __init__(self, task_num=10):
-        self.pbar = ipy.IntProgress(min=0, max=task_num,
-                                    bar_style='')  # (value=0, min=0, max=max, step=1, description=description, bar_style='')
-        self.labl = ipy.Label()
-        display(ipy.HBox([self.pbar, self.labl]))
+        self.progress_bar = ipy.IntProgress(min=0, max=task_num,
+                                            bar_style='')  # (value=0, min=0, max=max, step=1, description=description, bar_style='')
+        self.label = ipy.Label()
+        display(ipy.HBox([self.progress_bar, self.label]))
         self.task_num = task_num
         self.completed = 0
         self.start()
@@ -124,32 +124,32 @@ class ProgressBar(object):
         if task_num is not None:
             self.task_num = task_num
         if self.task_num > 0:
-            self.labl.value = '0/{}'.format(self.task_num)
+            self.label.value = '0/{}'.format(self.task_num)
         else:
-            self.labl.value = 'completed: 0, elapsed: 0s'
+            self.label.value = 'completed: 0, elapsed: 0s'
         self.start_time = time.time()
 
-    def upd(self, *p, **kw):
+    def update(self, *p, **kw):
         self.completed += 1
         elapsed = time.time() - self.start_time + 0.0000000000001
         fps = self.completed / elapsed if elapsed > 0 else 0
         if self.task_num > 0:
-            finaltime = time.asctime(time.localtime(self.start_time + self.task_num * elapsed / float(self.completed)))
-            fin = ' end %s' % finaltime[11:16]
+            final_time = time.asctime(time.localtime(self.start_time + self.task_num * elapsed / float(self.completed)))
+            fin = ' end %s' % final_time[11:16]
             percentage = self.completed / float(self.task_num)
             eta = int(elapsed * (1 - percentage) / percentage + 0.5)
-            self.labl.value = '{}/{}, rate {:.3g}s, time {}s, left {}s, {}'.format(self.completed, self.task_num,
-                                                                                   1. / fps, shortime(elapsed),
-                                                                                   shortime(eta), fin)
+            self.label.value = '{}/{}, rate {:.3g}s, time {}s, left {}s, {}'.format(self.completed, self.task_num,
+                                                                                    1. / fps, shortime(elapsed),
+                                                                                    shortime(eta), fin)
         else:
-            self.labl.value = 'completed {}, time {}s, {:.1f} steps/s'.format(self.completed, int(elapsed + 0.5), fps)
-        self.pbar.value += 1
-        if self.completed == self.task_num: self.pbar.bar_style = 'success'
+            self.label.value = 'completed {}, time {}s, {:.1f} steps/s'.format(self.completed, int(elapsed + 0.5), fps)
+        self.progress_bar.value += 1
+        if self.completed == self.task_num: self.progress_bar.bar_style = 'success'
         return
         # return self.completed
 
 
-def fourierfm(xy, map=256, fourier_scale=4, mapping_type='gauss'):
+def fourierfm(xy, _map=256, fourier_scale=4, mapping_type='gauss'):
     def input_mapping(x, B):  # feature mappings
         x_proj = (2. * np.pi * x) @ B
         y = np.concatenate([np.sin(x_proj), np.cos(x_proj)], axis=-1)
@@ -157,7 +157,7 @@ def fourierfm(xy, map=256, fourier_scale=4, mapping_type='gauss'):
         return y
 
     if mapping_type == 'gauss':  # Gaussian Fourier feature mappings
-        B = np.random.randn(2, map)
+        B = np.random.randn(2, _map)
         B *= fourier_scale  # scale Gauss
     else:  # basic
         B = np.eye(2).T
