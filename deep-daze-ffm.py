@@ -28,19 +28,15 @@ def displ(img, fname=None):
 def checkin(num):
     with torch.no_grad():
         img = model(mgrid).cpu().numpy()[0]
-    displ(img, os.path.join(tempdir, '%03d.jpg' % num))
+    displ(img, os.path.join(temp_dir, '%03d.jpg' % num))
 
 
-def train(iteration, img_encoding):
+def train(iteration):
     img_out = model(mgrid)
     imgs_sliced = slice_imgs([img_out], samples, norm_in, uniform)
     loss = 0
-    if vit:
-        vit_out_enc = vit_perceptor.encode_image(imgs_sliced[-1])
-        loss += -100 * torch.cosine_similarity(vit_txt_encode, vit_out_enc, dim=-1).mean()
-    if rn50:
-        rn50_out_enc = rn50_perceptor.encode_image(imgs_sliced[-1])
-        loss += -100 * torch.cosine_similarity(rn50_txt_encode, rn50_out_enc, dim=-1).mean()
+    out_enc = perceptor.encode_image(imgs_sliced[-1])
+    loss += -100 * torch.cosine_similarity(txt_encode, out_enc, dim=-1).mean()
 
     optimizer.zero_grad()
     loss.backward()
@@ -50,9 +46,9 @@ def train(iteration, img_encoding):
         checkin(iteration // save_freq)
 
 
-workdir = '_out'
-tempdir = os.path.join(workdir, 'ttt')
-os.makedirs(tempdir, exist_ok=True)
+work_dir = '_out'
+temp_dir = os.path.join(work_dir, 'ttt')
+os.makedirs(temp_dir, exist_ok=True)
 clear_output()
 translator = Translator()
 
@@ -65,41 +61,30 @@ upload_image = True  # @param {type:"boolean"}
 if translate:
     text = translator.translate(text, dest='en').text
 
-sideX = 256 # @param {type:"integer"}
-sideY = 256  # @param {type:"integer"}
+side_x = 512 # @param {type:"integer"}
+side_y = 512  # @param {type:"integer"}
 uniform = False  # @param {type:"boolean"}
-sync_cut = True  # @param {type:"boolean"}
-# @markdown > Training
-steps = 500  # @param {type:"integer"}
-save_freq = 1  # @param {type:"integer"}
-learning_rate = .0001  # @param {type:"number"}
-samples = 60  # @param {type:"integer"}
-# @markdown > Network
-siren_layers = 24  # @param {type:"integer"}
+sync_cut = True # @param {type:"boolean"}
+steps = 750 # @param {type:"integer"}
+save_freq = 250  # @param {type:"integer"}
+learning_rate = .00001  # @param {type:"number"}
+samples = 120  # @param {type:"integer"}
+siren_layers = 32  # @param {type:"integer"}
 use_fourier_feat_map = True  # @param {type:"boolean"}
-fourier_maps = 128  # @param {type:"integer"}
+fourier_maps = 256 # @param {type:"integer"}
 fourier_scale = 4  # @param {type:"number"}
-# @markdown > Misc
-audio_notification = False  # @param {type:"boolean"}
-vit = True
-rn50 = True
 out_name = text.replace(' ', '_')
 
-mgrid = get_mgrid(sideY, sideX)  # [262144,2]
+mgrid = get_mgrid(side_y, side_x)  # [262144,2]
 if use_fourier_feat_map:
     mgrid = fourierfm(mgrid, fourier_maps, fourier_scale)
 mgrid = torch.from_numpy(mgrid.astype(np.float32)).cuda()
-model = Siren(mgrid.shape[-1], 256, siren_layers, 3).cuda()
+model = Siren(mgrid.shape[-1], 256, siren_layers, 3, side_x, side_y).cuda()
 norm_in = torchvision.transforms.Normalize((0.48145466, 0.4578275, 0.40821073), (0.26862954, 0.26130258, 0.27577711))
 text_tokens = clip.tokenize(text)
 
-if vit:
-    vit_perceptor, vit_preprocess = clip.load('ViT-B/32')
-    vit_txt_encode = vit_perceptor.encode_text(text_tokens.cuda()).detach().clone()
-if rn50:
-    rn50_perceptor, rn50_preprocess = clip.load('RN50')
-    rn50_txt_encode = rn50_perceptor.encode_text(text_tokens.cuda()).detach().clone()
-
+perceptor, preprocess = clip.load('ViT-B/32')
+txt_encode = perceptor.encode_text(text_tokens.cuda()).detach().clone()
 optimizer = torch.optim.Adam(model.parameters(), learning_rate)
 
 pbar = ProgressBar(steps)

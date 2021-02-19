@@ -25,9 +25,11 @@ class SineLayer(nn.Module):
 
 
 class Siren(nn.Module):
-    def __init__(self, in_features, hidden_features, hidden_layers, out_features, outermost_linear=True,
+    def __init__(self, in_features, hidden_features, hidden_layers, out_features, side_x, side_y, outermost_linear=True,
                  first_omega_0=30, hidden_omega_0=30.):
         super().__init__()
+        self.side_x = side_x
+        self.side_y = side_y
 
         self.net = []
         self.net.append(SineLayer(in_features, hidden_features, is_first=True, omega_0=first_omega_0))
@@ -49,4 +51,4 @@ class Siren(nn.Module):
     def forward(self, coords):
         coords = coords.clone().detach().requires_grad_(True)
         output = self.net(coords.cuda())
-        return output.view(1, sideY, sideX, 3).permute(0, 3, 1, 2)  # .sigmoid_()
+        return output.view(1, self.side_y, self.side_x, 3).permute(0, 3, 1, 2)  # .sigmoid_()
